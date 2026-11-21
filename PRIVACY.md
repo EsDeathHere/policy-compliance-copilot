@@ -14,7 +14,7 @@ Policy Compliance Copilot reads Jira and Confluence data on demand when a user l
 
 ## Data processed and purpose
 
-- Jira: issue key, Summary, Description, configured amount/currency/quote-count/vendor/category/approval-reference custom fields. Used to derive procurement facts and evaluate supported rules.
+- Jira: issue key, Summary, Description, attachment metadata returned by Jira, configured amount/currency/quote-count/vendor/category/approval-reference custom fields. Used to derive procurement facts and evaluate supported rules. The app counts attachments and HTTP/HTTPS description links (including ADF link attributes); it does not download attachment contents or follow evidence URLs. Only evidence counts, not attachment metadata or extracted link destinations, are included in optional AI facts. Description content can independently contain URLs.
 - Confluence: selected page ID, title, version, and page body. Used to extract SOP rules and identify the policy version used.
 - Results: status, score, checks, source identifiers, timestamp, and optional AI advice. Returned to the requesting UI, Rovo Agent, or MCP client.
 - Invocation authentication: handled by Atlassian Forge. Product REST calls use `api.asUser()` and remain subject to the invoking user's permissions. The application does not ask users to supply Atlassian passwords or tokens.

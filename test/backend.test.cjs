@@ -5,6 +5,7 @@ const compliance = require('../src/compliance.cjs');
 (async () => {
   const calls = [];
   let forbidden = false;
+  let attachments = [{ id: '1' }];
   const rules = { quoteThresholds: { USD: 10000 }, minimumQuotes: 3, prohibitedCategories: [] };
   const reply = value => ({ ok: true, json: async () => value });
   const api = { asUser: () => ({
@@ -15,8 +16,14 @@ const compliance = require('../src/compliance.cjs');
     },
     requestJira: async (path, options) => {
       calls.push(path);
-      if (options) { assert.match(options.body, /COMPLIANT/); return reply({ id: '123' }); }
-      return reply({ key: 'FIN-1', fields: { summary: 'Amount: 12000\nCurrency: USD\nQuote count: 3\nCategory: software\nVendor: Example' } });
+      if (options) {
+        assert.match(options.body, /NEEDS_REVIEW/);
+        assert.match(options.body, /Remediation steps/);
+        assert.match(options.body, /0 attachments/);
+        return reply({ id: '123' });
+      }
+      assert.match(path, /fields=summary,description,attachment/);
+      return reply({ key: 'FIN-1', fields: { attachment: attachments, summary: 'Amount: 12000\nCurrency: USD\nQuote count: 3\nCategory: software\nVendor: Example' } });
     },
   }) };
   const mock = new vm.SyntheticModule(['default', 'route', 'fetch'], function () {
@@ -29,12 +36,14 @@ const compliance = require('../src/compliance.cjs');
   await module.link(name => name === '@forge/api' ? mock : pure);
   await module.evaluate();
   const { checkIssueCompliance, getPolicyRules, addAuditComment } = module.namespace;
-  await assert.rejects(getPolicyRules({ policyPageId: '../private' }), /tidak valid/);
+  await assert.rejects(getPolicyRules({ policyPageId: '../private' }), /invalid/);
   assert.equal(calls.length, 0);
   const input = { issueKey: 'FIN-1', policyPageId: '42' };
   const result = await checkIssueCompliance(input);
   assert.equal(result.status, 'COMPLIANT');
   assert.equal(result.policy.version, 4);
+  attachments = [];
+  assert.equal((await checkIssueCompliance(input)).status, 'NEEDS_REVIEW');
   assert.equal((await addAuditComment({ ...input, result: { status: 'forged' } })).commentId, '123');
   process.env.EXTERNAL_AI_ENABLED = 'true';
   process.env.EXTERNAL_AI_BASE_URL = 'http://127.0.0.1';
