@@ -80,10 +80,6 @@ permissions:
     - read:jira-work
     - write:jira-work
     - read:page:confluence
-  external:
-    fetch:
-      backend:
-        - address: https://api.openai.com
 app:
   compatibility:
     jira:
