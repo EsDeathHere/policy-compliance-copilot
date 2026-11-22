@@ -1,6 +1,8 @@
 import api, { route, fetch } from '@forge/api';
 import compliance from './compliance.cjs';
+import sample from './sample-policy.cjs';
 const { plainText, parsePolicy, issueFacts, evaluate } = compliance;
+const { samplePolicy } = sample;
 
 function identifier(value, pattern, label) {
   if (typeof value !== 'string' || !pattern.test(value)) throw new Error(`${label} is invalid.`);
@@ -21,6 +23,20 @@ export async function getPolicyRules({ policyPageId } = {}) {
   const text = plainText(document);
   return { pageId: id, title: page.title, version: page.version?.number, rules: parsePolicy(document), text };
 }
+// One-click demo path: the same policy shape without reading Confluence.
+export function getSamplePolicy() {
+  return samplePolicy();
+}
+// Recent pages for the Jira panel picker. Uses the existing read:page:confluence scope.
+export async function searchPolicyPages({ query } = {}) {
+  const title = typeof query === 'string' ? query.trim() : '';
+  if (title.length > 200) throw new Error('Search text is too long.');
+  const path = `/wiki/api/v2/pages?limit=25&sort=-modified-date${title ? `&title=${encodeURIComponent(title)}` : ''}`;
+  const data = await jsonResponse(await api.asUser().requestConfluence(path), 'Policy page search');
+  return (Array.isArray(data.results) ? data.results : [])
+    .filter(page => page && page.id && page.title)
+    .map(page => ({ id: String(page.id), title: page.title }));
+}
 async function readIssue(issueKey) {
   const key = identifier(issueKey, /^[A-Z][A-Z0-9_]*-\d{1,15}$/, 'Issue key');
   // Explicit field IDs, configured by the app operator; never accept arbitrary field paths from a browser.
@@ -39,8 +55,9 @@ async function readIssue(issueKey) {
   }
   return { key: issue.key, facts };
 }
-export async function checkIssueCompliance({ issueKey, policyPageId } = {}) {
-  const [issue, policy] = await Promise.all([readIssue(issueKey), getPolicyRules({ policyPageId })]);
+export async function checkIssueCompliance({ issueKey, policyPageId, useSamplePolicy } = {}) {
+  // useSamplePolicy must be strictly true; any other value reads the real page.
+  const [issue, policy] = await Promise.all([readIssue(issueKey), useSamplePolicy === true ? samplePolicy() : getPolicyRules({ policyPageId })]);
   const result = { ...evaluate(issue.facts, policy.rules), issueKey: issue.key, policy: { pageId: policy.pageId, title: policy.title, version: policy.version }, checkedAt: new Date().toISOString() };
   // AI is advisory only. Deterministic findings cannot be overridden by model output.
   if (process.env.EXTERNAL_AI_ENABLED === 'true') {
