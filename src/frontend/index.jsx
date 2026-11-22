@@ -1,6 +1,8 @@
 import React, { useEffect, useState } from 'react';
-import ForgeReconciler, { Button, Heading, Label, SectionMessage, Select, Stack, Text, Textfield } from '@forge/react';
+import ForgeReconciler, { Button, DynamicTable, Heading, Label, ProgressBar, SectionMessage, Select, Stack, Text, Textfield } from '@forge/react';
 import { invoke, view } from '@forge/bridge';
+
+const outcomeIcon = outcome => (outcome === 'PASS' ? '✅' : outcome === 'FAIL' ? '❌' : '⚠️');
 
 const App = () => {
   const [context, setContext] = useState(null);
@@ -54,9 +56,10 @@ const App = () => {
     setBusy(true);
     setError(''); setMessage('');
     try {
-      const data = await invoke(name, { issueKey, policyPageId: pageId.trim(), useSamplePolicy: useSample });
+      const data = await invoke(name, { issueKey, policyPageId: pageId.trim(), useSamplePolicy: useSample, ...(name === 'postComplianceChecklist' ? { confirmed: true } : {}) });
       if (name === 'getPolicyRules') setPolicy(data);
       else if (name === 'addAuditComment') { setResult(data.result); setMessage(`Audit comment ${data.commentId} added.`); }
+      else if (name === 'postComplianceChecklist') setMessage(`Compliance checklist comment ${data.commentId} added.`);
       else setResult(data);
     } catch (failure) {
       setError(failure.message || 'The operation failed. Check the page ID and your permissions, then try again.');
@@ -103,15 +106,28 @@ const App = () => {
       {policy && <SectionMessage title={`${policy.title} — v${policy.version}`} appearance={policy.rules.supported ? 'information' : 'warning'}>
         <Text>{policy.rules.supported ? JSON.stringify(policy.rules) : 'No complete supported policy found. Add reviewed JSON, a policy table, or key-value rules; otherwise human review is required.'}</Text>
       </SectionMessage>}
-      {result && <Stack space="space.100">
+      {result && <Stack space="space.150">
         <Heading as="h3">{result.status} — {result.score}/100</Heading>
+        <ProgressBar value={result.score} />
         <Text>{result.policy.title} — v{result.policy.version} — {result.checkedAt}</Text>
         <Text>Evidence detected: {result.evidence.attachmentCount ?? 'unknown'} attachments; {result.evidence.linkCount} document links.</Text>
-        {result.checks.map(check => <Stack key={check.rule} space="space.050">
-          <Text>{check.outcome}: {check.rule} — {check.detail}</Text>
-          {check.remediation && <Text>Remediation steps: {check.remediation}</Text>}
-        </Stack>)}
+        <DynamicTable
+          head={{ cells: [
+            { key: 'status', content: 'Status' },
+            { key: 'rule', content: 'Rule' },
+            { key: 'source', content: 'SOP clause' },
+            { key: 'detail', content: 'Finding' },
+          ] }}
+          rows={result.checks.map((check, index) => ({ key: String(index), cells: [
+            { key: 'status', content: <Text>{outcomeIcon(check.outcome)} {check.outcome}</Text> },
+            { key: 'rule', content: <Text>{check.rule}</Text> },
+            { key: 'source', content: <Text>{check.source || '—'}</Text> },
+            { key: 'detail', content: <Text>{check.detail}</Text> },
+          ] }))}
+        />
+        {result.checks.filter(check => check.remediation).map(check => <Text key={`fix-${check.rule}`}>Fix {check.rule}: {check.remediation}</Text>)}
         <Text>{result.notice}</Text>
+        <Button isDisabled={busy} onClick={() => perform('postComplianceChecklist')}>Insert Compliance Checklist (writes a Jira comment)</Button>
         <Button isDisabled={busy} onClick={() => perform('addAuditComment')}>Add Audit Comment (rechecks current data)</Button>
       </Stack>}
     </Stack>
