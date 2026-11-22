@@ -14,7 +14,7 @@ Policy Compliance Copilot reads Jira and Confluence data on demand when a user l
 
 ## Data processed and purpose
 
-- Jira: issue key, Summary, Description, attachment metadata returned by Jira, configured amount/currency/quote-count/vendor/category/approval-reference custom fields. Used to derive procurement facts and evaluate supported rules. The app counts attachments and HTTP/HTTPS description links (including ADF link attributes); it does not download attachment contents or follow evidence URLs. Only evidence counts, not attachment metadata or extracted link destinations, are included in optional AI facts. Description content can independently contain URLs.
+- Jira: issue key, Summary, Description, attachment metadata returned by Jira, configured amount/currency/quote-count/vendor/category/approval-reference custom fields. Used to derive procurement facts and evaluate supported rules. The app counts attachments and HTTP/HTTPS description links (including ADF link attributes); it does not download attachment contents or follow evidence URLs. Results include evidence counts. Attachment metadata and extracted evidence URLs are processed only to compute those counts.
 - Confluence: selected page ID, title, version, and page body. Used to extract SOP rules and identify the policy version used.
 - Results: status, score, checks, source identifiers, and timestamp. Returned to the requesting UI, Rovo Agent, or MCP client.
 - Invocation authentication: handled by Atlassian Forge. Product REST calls use `api.asUser()` and remain subject to the invoking user's permissions. The application does not ask users to supply Atlassian passwords or tokens.
@@ -37,7 +37,7 @@ The manifest declares no `permissions.external.fetch` entries. The app calls onl
 
 ### Rovo MCP clients
 
-Tools return data to their caller. `getPolicyRules` returns extracted policy text as well as structured rules and source metadata; a compliance check returns findings, and a remediation plan returns steps and a checklist. External MCP exposure is disabled by default and requires administrator activation. Posting a checklist requires an explicit action in the Jira issue panel. The Rovo and MCP tools are read-only. External clients may store tool results or conversation history under their own policies. Enable only approved clients and tools; the app cannot delete copies retained by them.
+Tools return data to their caller. `getPolicyRules` returns recognized policy rules and source metadata; a compliance check returns findings, and a remediation plan returns steps and a checklist. External MCP exposure is disabled by default and requires administrator activation. Posting a checklist requires an explicit action in the Jira issue panel. The Rovo and MCP tools are read-only. External clients may store tool results or conversation history under their own policies. Enable only approved clients and tools; the app cannot delete copies retained by them.
 
 ## Retention, deletion and controls
 

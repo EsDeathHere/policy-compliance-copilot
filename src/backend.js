@@ -1,7 +1,7 @@
 import api, { route } from '@forge/api';
 import compliance from './compliance.cjs';
 import sample from './sample-policy.cjs';
-const { plainText, parsePolicy, issueFacts, evaluate } = compliance;
+const { parsePolicy, issueFacts, evaluate } = compliance;
 const { samplePolicy } = sample;
 
 function identifier(value, pattern, label) {
@@ -9,6 +9,7 @@ function identifier(value, pattern, label) {
   return value;
 }
 async function jsonResponse(response, label) {
+  if (response.status === 429) throw new Error(`${label} was rate limited (HTTP 429). Wait briefly and try again.`);
   // Do not expose response bodies: they may contain private content or provider details.
   if (!response.ok) throw new Error(`${label} failed (HTTP ${response.status}). Check your permissions and product connection.`);
   return response.json();
@@ -20,8 +21,7 @@ export async function getPolicyRules({ policyPageId } = {}) {
   if (!body || body.length > 150000) throw new Error('The policy is empty or exceeds the 150000-character limit.');
   let document;
   try { document = JSON.parse(body); } catch { throw new Error('The policy document format is not supported.'); }
-  const text = plainText(document);
-  return { pageId: id, title: page.title, version: page.version?.number, rules: parsePolicy(document), text };
+  return { pageId: id, title: page.title, version: page.version?.number, rules: parsePolicy(document) };
 }
 // One-click demo path: the same policy shape without reading Confluence.
 export function getSamplePolicy() {
@@ -46,11 +46,12 @@ async function readIssue(issueKey) {
   if (custom.some(field => !/^customfield_\d+$/.test(field))) throw new Error('The custom field configuration is invalid.');
   const fields = ['summary', 'description', 'attachment', ...custom].join(',');
   const issue = await jsonResponse(await api.asUser().requestJira(route`/rest/api/3/issue/${key}?fields=${fields}`), 'Issue retrieval');
-  const facts = issueFacts(issue.fields);
+  const issueFields = issue.fields ?? {};
+  const facts = issueFacts(issueFields);
   for (const [name, property] of Object.entries({ AMOUNT: 'amount', CURRENCY: 'currency', QUOTES: 'quoteCount', VENDOR: 'vendor', CATEGORY: 'category', APPROVAL: 'approvalReference' })) {
     const field = process.env[`JIRA_${name}_FIELD`];
     if (field) {
-      const value = issue.fields[field];
+      const value = issueFields[field];
       // Keep malformed or missing custom values unknown instead of falling back to untrusted prose.
       facts[property] = ['amount', 'quoteCount'].includes(property) ? (typeof value === 'number' ? value : undefined) : (typeof value === 'string' ? value : undefined);
     }

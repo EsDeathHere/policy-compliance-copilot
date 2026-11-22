@@ -5,14 +5,14 @@ const compliance = require('../src/compliance.cjs');
 (async () => {
   const calls = [];
   const posts = [];
-  let forbidden = false;
+  let policyError;
   let attachments = [{ id: '1' }];
   const rules = { quoteThresholds: { USD: 10000 }, minimumQuotes: 3, prohibitedCategories: [] };
   const reply = value => ({ ok: true, json: async () => value });
   const api = { asUser: () => ({
     requestConfluence: async path => {
       calls.push(path);
-      if (forbidden) return { ok: false, status: 403 };
+      if (policyError) return { ok: false, status: policyError };
       if (path.includes('/pages?')) return reply({ results: [{ id: '42', title: 'Finance SOP' }] });
       return reply({ title: 'Finance SOP', version: { number: 4 }, body: { atlas_doc_format: { value: JSON.stringify({ content: [{ text: JSON.stringify(rules) }] }) } } });
     },
@@ -95,7 +95,9 @@ const compliance = require('../src/compliance.cjs');
   assert.match(JSON.stringify(body), /Rule checklist/);
   assert.match(JSON.stringify(body), /Remediation plan/);
 
-  forbidden = true;
+  policyError = 429;
+  await assert.rejects(checkIssueCompliance(input), /rate limited.*429/);
+  policyError = 403;
   await assert.rejects(checkIssueCompliance(input), /403/);
   console.log('Backend checks passed');
 })().catch(error => { console.error(error); process.exitCode = 1; });

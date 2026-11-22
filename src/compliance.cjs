@@ -61,13 +61,18 @@ function parsePolicy(input) {
       !Array.isArray(rules.prohibitedCategories) || rules.prohibitedCategories.some(v => typeof v !== 'string' || !v.trim())) {
     throw new Error('Policy requires quoteThresholds, minimumQuotes and prohibitedCategories.');
   }
-  return { ...rules, prohibitedCategories: rules.prohibitedCategories.map(value => value.trim().toLowerCase()), supported: true };
+  const { quoteThresholds, minimumQuotes, approvalThresholds } = rules;
+  return { quoteThresholds, minimumQuotes, ...(approvalThresholds && { approvalThresholds }), prohibitedCategories: rules.prohibitedCategories.map(value => value.trim().toLowerCase()), supported: true };
 }
 
 function issueFacts(fields) {
   const description = plainText(fields.description);
   const text = `${fields.summary || ''}\n${description}`;
-  const field = label => text.match(new RegExp(`^${label}:[ \\t]*(.+)$`, 'im'))?.[1]?.trim();
+  const field = label => {
+    // Repeated declarations are ambiguous, even when one of them is blank.
+    const matches = [...text.matchAll(new RegExp(`^${label}:[ \\t]*([^\\r\\n]*)`, 'gim'))];
+    return matches.length === 1 ? matches[0][1].trim() : undefined;
+  };
   const amount = field('Amount');
   const quotes = field('Quote count');
   const links = new Set();

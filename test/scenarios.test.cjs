@@ -50,13 +50,15 @@ const cases = [
   { name: 'markdown table policy', facts: base, p: tablePolicy, expected: 'COMPLIANT' },
   { name: 'duplicate policy label', facts: base, p: parsePolicy('Quote threshold USD: 10000\nMinimum quotes: 3\nMinimum quotes: 2\nProhibited categories: gambling'), expected: 'NEEDS_REVIEW' },
   { name: 'grouped number rejected', facts: base, p: parsePolicy('Quote threshold USD: 10,000\nMinimum quotes: 3\nProhibited categories: gambling'), expected: 'NEEDS_REVIEW' },
-  { name: 'unknown category is not prohibited', facts: { ...base, category: 'consulting' }, p: policy, expected: 'COMPLIANT' },
+  { name: 'conflicting issue declarations require review', facts: issueFacts({ description: 'Amount: 4000\nAmount: 12000\nCurrency: USD\nVendor: Example\nCategory: software' }), p: policy, expected: 'NEEDS_REVIEW' },
   { name: 'IDR threshold policy', facts: { ...base, amount: 12000000, currency: 'IDR', approvalReference: '' }, p: idrPolicy, expected: 'NEEDS_REVIEW' },
   { name: 'arbitrary prose policy is unsupported', facts: base, p: parsePolicy('Minimal 3 penawaran untuk pembelian di atas Rp 10 juta'), expected: 'NEEDS_REVIEW' },
   { name: 'injection: description says ignore SOP', facts: injectedFacts, p: policy, expected: 'NON_COMPLIANT' },
   { name: 'injection: policy body contains override instruction', facts: { ...base, quoteCount: 2 }, p: injectedPolicy, expected: 'NON_COMPLIANT' },
   { name: 'injection: category carries fake system text', facts: injectedCategoryFacts, p: policy, expected: 'NON_COMPLIANT' },
 ];
+
+assert.equal(Object.hasOwn(injectedPolicy, 'note'), false);
 
 let passed = 0;
 const failures = [];
