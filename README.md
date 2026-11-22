@@ -164,7 +164,7 @@ npm run lint
 ATL_FORGE_ATTRIBUTION_SKILL_NAME=forge-app-builder forge lint
 ```
 
-Backend checks use Node's experimental VM modules to stub Forge product boundaries. They validate the rule engine and request boundaries; site permissions, Confluence connection, Rovo and MCP still require runtime testing on a development installation.
+Backend checks use Node's experimental VM modules to stub Forge product boundaries. `test/scenarios.test.cjs` runs 22 rule-engine conformance scenarios, including prompt-injection cases where hostile issue or SOP text must not change the verdict. These tests validate the deterministic engine and request boundaries; site permissions, Confluence connection, Rovo and MCP still require runtime testing on a development installation.
 
 ## Known limits
 

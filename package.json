@@ -6,7 +6,7 @@
   "private": true,
   "scripts": {
     "lint": "eslint 'src/**/*.{js,jsx}'",
-    "test": "node test/compliance.test.cjs && node --experimental-vm-modules test/backend.test.cjs"
+    "test": "node test/compliance.test.cjs && node test/scenarios.test.cjs && node --experimental-vm-modules test/backend.test.cjs"
   },
   "devDependencies": {
     "eslint": "^8.56.0",
