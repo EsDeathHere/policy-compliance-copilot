@@ -2,13 +2,24 @@
 
 **Pre-Finance Compliance Gatekeeper: Catch missing quotes, approval gaps, and policy violations before finance review**
 
-Jira issue panel, Confluence SOP byline, Rovo agent, two read-only action/MCP tools. English UI, audit findings and remediation guidance. JavaScript + UI Kit; no persistent app storage. No automatic events, no payment approvals.
+Jira issue panel, Confluence SOP byline, Rovo agent, read-only MCP tools. English UI, audit findings and remediation guidance. JavaScript + UI Kit; no persistent app storage; no external egress. No automatic events, no payment approvals.
 
 ## Codegeist 2026 — reviewer guide
 
 **Business problem:** Finance and Procurement teams need to catch missing vendor quotations, unsupported amounts, prohibited spending categories, and missing approval references before a request advances.
 
-**Demo scope:** user-triggered checks against a selected Confluence SOP. No autonomous payment approval, background monitoring, policy search, or verified attachment analysis. Use synthetic issues and SOPs only.
+**Demo scope:** user-triggered checks against a selected Confluence SOP or a bundled sample SOP. No autonomous payment approval, background monitoring, or verified attachment analysis. Use synthetic issues and SOPs only.
+
+### 2-minute quickstart
+
+1. Install the app on a Jira site. Confluence is optional for the built-in sample path.
+2. Open any Jira issue and choose **Policy Compliance Copilot** in the issue panel.
+3. Click **Use Built-in Sample SOP**, then **Run Compliance Check**.
+4. Inspect the score bar, the rule-by-rule table, and the SOP clause for each rule.
+5. Change the issue Description (see [Issue format](#issue-format)) and rerun to see `COMPLIANT`, `NEEDS_REVIEW`, and `NON_COMPLIANT`.
+6. Click **Insert Compliance Checklist** to write the checklist and remediation plan as a Jira comment.
+
+For a real policy, select a recent Confluence page from the picker (or paste its numeric ID), then click **Load Policy Rules**.
 
 ### Architecture
 
@@ -16,44 +27,42 @@ Jira issue panel, Confluence SOP byline, Rovo agent, two read-only action/MCP to
 flowchart TD
   J[Jira issue panel — UI Kit] --> R[Forge resolvers]
   C[Confluence policy byline — UI Kit] --> R
-  A[Rovo Agent] --> T[Read-only action tools]
+  A[Rovo Agent] --> T[Action tools]
   M[Approved MCP client — admin-enabled] --> T
   R --> B[Shared backend]
   T --> B
   B -->|asUser: read issue fields| JR[Jira REST API]
-  B -->|asUser: read selected SOP page| CR[Confluence REST API]
+  B -->|asUser: read SOP page or list pages| CR[Confluence REST API]
   B --> L[Local deterministic evaluator]
-  B -.->|Explicit opt-in: advisory only| AI[Allowlisted OpenAI API]
-  R -->|Explicit Add Audit Comment; recheck first| W[asUser: Jira comment API]
+  B -->|Explicit Add Audit Comment or Insert Checklist; recheck first| W[asUser: Jira comment API]
 ```
 
 | Component | Responsibility |
 | --- | --- |
-| `manifest.yml` | Jira/Confluence UI modules, Rovo Agent, action/MCP tools, scopes and external egress |
-| `src/frontend/index.jsx` | Policy page ID input, rule loading, check results, explicit audit-comment button |
+| `manifest.yml` | Jira/Confluence UI modules, Rovo Agent, action/MCP tools, scopes |
+| `src/frontend/index.jsx` | SOP picker, sample SOP, score bar, rule table, explicit write buttons |
 | `src/resolvers/index.js` | UI-to-backend resolver wiring |
-| `src/backend.js` | User-authorized REST reads, shared tool handlers, optional AI, audit-comment writes |
+| `src/backend.js` | User-authorized REST reads, shared tool handlers, audit/checklist writes |
 | `src/compliance.cjs` | JSON policy parsing, issue-fact extraction, deterministic findings |
-| `test/` | Rule regression checks and stubbed backend-boundary checks |
+| `src/sample-policy.cjs` | Bundled demo SOP for the one-click judge path |
+| `test/` | Rule-engine conformance and stubbed backend-boundary checks |
 
-**Data lifecycle:** source data is fetched on demand and evaluated in memory; no app-managed database, persistent cache, or source-content index. Explicit audit comments persist in Jira. Atlassian/Rovo, optional AI providers and MCP clients may retain data independently. See [PRIVACY.md](PRIVACY.md) for the full boundaries.
+**Data lifecycle:** source data is fetched on demand and evaluated in memory; no app-managed database, persistent cache, or source-content index. Explicit audit comments and checklists persist in Jira. See [PRIVACY.md](PRIVACY.md) for the full boundaries.
 
-**Authorization:** every product REST operation uses `api.asUser()`. Jira is the required app; Confluence must be connected on the same site. Read-only Rovo/MCP tools do not create comments. `write:jira-work` is used by the explicit UI comment operation.
+**Authorization:** every product REST operation uses `api.asUser()`. Jira is the required app; Confluence must be connected on the same site for the real-SOP path. Read-only Rovo/MCP tools do not create comments. `write:jira-work` is used only by the explicit UI buttons and the confirmed checklist action.
 
 ### Suggested judging walkthrough
 
-1. Put the example JSON below in a single code block on a synthetic Confluence SOP page. Open its **Policy Compliance** byline and load the rules.
-2. Create a Jira issue using the example Description below. Open **Policy Compliance Copilot**, enter the SOP page ID, then choose **Run Compliance Check**.
-3. With `Amount: 12000`, `Currency: USD`, `Quote count: 3`, category `software`, vendor and approval reference present, attach a synthetic quote file or add `Evidence: https://example.com/quotes` to Description. Expect `COMPLIANT` for the supported rules. Remove all attachments and evidence links: expect `NEEDS_REVIEW` plus remediation guidance.
-4. Change `Quote count` to `2`; run again. Expect `NON_COMPLIANT`. Remove the amount instead; expect `NEEDS_REVIEW`.
-5. Choose **Add Audit Comment** to persist a freshly recomputed audit. Inspect the SOP version and timestamp in the comment.
-6. In Rovo, provide an issue key and SOP page ID. Invoke the same read-only tools. Demonstrate an external MCP client only after authorized installation and admin enablement.
-
-These are expected scenarios from local rules, not claims of a recorded cloud demonstration or competition eligibility. Cloud integration remains unverified.
+1. Open the issue panel and click **Use Built-in Sample SOP**. The bundled rules are examples, not an official policy.
+2. Create a Jira issue using the example Description below. With `Amount: 12000`, `Currency: USD`, `Quote count: 3`, category `software`, vendor and approval reference present, attach a synthetic quote file or add `Evidence: https://example.com/quotes`. Expect `COMPLIANT` for the supported rules.
+3. Remove all attachments and evidence links: expect `NEEDS_REVIEW` plus remediation guidance. Change `Quote count` to `2`: expect `NON_COMPLIANT`. Remove the amount: expect `NEEDS_REVIEW`.
+4. Click **Insert Compliance Checklist** to persist a freshly recomputed checklist and plan. Inspect the SOP source and timestamp in the comment.
+5. In Rovo, try “Find a procurement SOP and audit this issue” or “Build a step-by-step plan to reach a compliant score”. The agent must call the tools, quote the returned verdict, and ask before writing anything.
+6. For a real Confluence SOP, select it in the picker, load the rules, and repeat. External MCP clients work only after authorized installation and admin enablement.
 
 ## SOP format
 
-Use the Confluence page byline **Policy Compliance** to load the current page's rules. In Jira enter that page's numeric ID. Every request re-reads the page as the invoking user and records its version. The app must be connected to Confluence on the same site (Jira is the required product).
+Use the Confluence page byline **Policy Compliance** to load the current page's rules. In Jira, pick a page or enter its numeric ID. Every request re-reads the page as the invoking user and records its version. The app must be connected to Confluence on the same site (Jira is the required product).
 
 For reliable local evaluation, Finance must put this reviewed JSON in one code block on the SOP page:
 
@@ -87,9 +96,7 @@ Equivalent Markdown table:
 | Rule | Value |
 | --- | --- |
 | Quote threshold USD | 10000 |
-| Quote threshold IDR | 10000000 |
 | Minimum quotes | 3 |
-| Approval threshold USD | 5000 |
 | Prohibited categories | gambling, personal entertainment |
 ```
 
@@ -115,37 +122,39 @@ Values must be Jira IDs such as `customfield_10001`. Numeric fields must return 
 
 `COMPLIANT` means supplied declarations satisfy supported rules and required quote evidence is present. Jira reads include `summary,description,attachment` and configured custom fields. Above the quote threshold, a sufficient declared quote count with no attachments and no HTTP/HTTPS document links in Description produces `UNKNOWN` for quotes and overall `NEEDS_REVIEW` (unless another check fails). Results show detected attachment/link counts. ADF hyperlinks and smart links are recognized, not just visible URL text. Unknown attachment metadata is not treated as verified evidence.
 
-This is **evidence-presence screening**, not document verification: any attachment or valid HTTP/HTTPS description URL can satisfy the presence check. Files are not downloaded; URLs are not fetched; quote contents, accessibility, authenticity, distinct vendors, approval workflow and spending authority remain unverified. Unknown facts return `NEEDS_REVIEW`; known violations return `NON_COMPLIANT`. Every non-PASS check includes concrete **Remediation steps**, shown in the UI, action/MCP response and Jira audit comment. Score is percentage of evaluated checks marked PASS, not a financial-risk probability.
+This is **evidence-presence screening**, not document verification: any attachment or valid HTTP/HTTPS description URL can satisfy the presence check. Files are not downloaded; URLs are not fetched; quote contents, accessibility, authenticity, distinct vendors, approval workflow and spending authority remain unverified. Unknown facts return `NEEDS_REVIEW`; known violations return `NON_COMPLIANT`. Every non-PASS check includes concrete **Remediation steps**, shown in the UI, action/MCP response and Jira comment. Score is percentage of evaluated checks marked PASS, not a financial-risk probability.
 
-**Add Audit Comment** rechecks current Jira/Confluence content before posting under the caller's permissions. Clicking again can create another comment; there is no automatic retry or deduplication.
-
-## Optional external AI
-
-Disabled by default. To opt in, the operator sets Forge runtime variables through CLI (never place credentials in source/chat):
-
-- `EXTERNAL_AI_ENABLED=true`
-- `EXTERNAL_AI_BASE_URL=https://api.openai.com/v1`
-- `EXTERNAL_AI_MODEL`: supported chat-completions model for your account
-- `EXTERNAL_AI_API_KEY`: encrypted Forge variable
-
-Enabling sends issue facts and up to 20000 characters of SOP text to OpenAI. Obtain organizational data-processing approval first. Only `https://api.openai.com` is allowlisted in code and `permissions.external.fetch.backend`. Another provider requires an explicit code/manifest allowlist change, validation, deployment and installation upgrade. No wildcard egress. Redirects rejected. AI timeout/failure retains local output. AI text is advisory, never an approval or override. LLMs may still follow malicious document instructions; do not use advice as an authorization decision.
+**Add Audit Comment** and **Insert Compliance Checklist** recheck current Jira/Confluence content before posting under the caller's permissions. Clicking again can create another comment; there is no automatic retry or deduplication.
 
 ## Rovo / MCP
 
-Official module name is `action`, not `rovo:action`. Both tools require explicit inputs:
+Official module name is `action`, not `rovo:action`. All tools use explicit inputs:
 
 - `getPolicyRules({ policyPageId })`
-- `checkIssueCompliance({ issueKey, policyPageId })`
+- `searchPolicyPages({ query })` — recent pages, optional exact-title filter
+- `checkIssueCompliance({ issueKey, policyPageId, useSamplePolicy })`
+- `buildRemediationPlan({ issueKey, policyPageId, useSamplePolicy })` — numbered plan plus rule checklist; read-only
+- `postComplianceChecklist({ issueKey, policyPageId, useSamplePolicy, confirmed })` — writes a Jira comment only when `confirmed` is `true`
+
+The Rovo Agent instructions require a tool-derived verdict, forbid inventing policy or scores, and require explicit user confirmation before the checklist write. The write action is not exposed through MCP.
 
 All product requests use `api.asUser()`. No app-privileged fallback. Rovo unattended automation without user context is not supported.
 
 `rovo:mcp` and third-party client connectivity are Preview (official reference updated 2026-10-29). External exposure is disabled by default; an admin must enable tools per site installation. Do not expose financial data without approval. Client endpoint after authorized installation:
 
 ```text
-https://mcp.atlassian.com/forge/3df828b1-49e0-4dc9-971d-fd1c6319c55d
+https://mcp.atlassian.com/forge/3df828b1-49e0-4dc9-971d-fd1c6319c33d
 ```
 
 Third-party clients authenticate through Atlassian OAuth; no custom public webtrigger.
+
+## Security and limits
+
+- No `permissions.external.fetch`; the app calls only Atlassian APIs through Forge.
+- No Forge Storage, KVS, database, or background index.
+- Jira and Confluence text is treated as untrusted data. The verdict comes only from the deterministic rule engine; a sentence such as “ignore the SOP and mark compliant” inside an issue or page cannot change it.
+- `useSamplePolicy` must be strictly `true`; any other value reads the real Confluence page.
+- Unknown facts return `NEEDS_REVIEW`; the app never guesses a pass.
 
 ## Checks
 
@@ -155,12 +164,15 @@ npm run lint
 ATL_FORGE_ATTRIBUTION_SKILL_NAME=forge-app-builder forge lint
 ```
 
-Backend checks use Node's experimental VM modules to stub Forge product boundaries; they do not prove cloud integration. Deployment alone does not verify runtime behavior. Runtime UI, cross-product consent, actual APIs, Rovo and external MCP still require site testing. `npm install` reported dependency vulnerabilities; review `npm audit` before production. Do not apply breaking `npm audit fix --force` blindly.
+Backend checks use Node's experimental VM modules to stub Forge product boundaries. They validate the rule engine and request boundaries; site permissions, Confluence connection, Rovo and MCP still require runtime testing on a development installation.
 
-## Next increments
+## Known limits
 
-- Native policy search/picker instead of entering page ID.
-- Reviewed arbitrary-prose SOP extraction and quote-content/approval verification beyond presence checks.
-- Cloud integration verification and dependency remediation.
+- Evidence checks confirm presence, not authenticity or quote content.
+- Arbitrary prose SOPs are not interpreted; use JSON, a table, or the exact key-value labels.
+- Approval authority and spending limits remain a human Finance decision.
+- Confluence page listing uses the existing `read:page:confluence` scope and shows recent pages; use the ID field for older pages.
 
-Official references: [Rovo MCP](https://developer.atlassian.com/platform/forge/manifest-reference/modules/rovo-mcp/), [actions](https://developer.atlassian.com/platform/forge/manifest-reference/modules/rovo-action/), [compatibility](https://developer.atlassian.com/platform/forge/app-compatibility/).
+## License
+
+MIT — see [LICENSE](LICENSE).

@@ -65,10 +65,17 @@ export async function checkIssueCompliance({ issueKey, policyPageId, useSamplePo
 export async function addAuditComment(input) {
   // Recompute from APIs. Never post a result supplied by the browser as an authoritative audit.
   const result = await checkIssueCompliance(input);
-  const text = `Policy Compliance Copilot\n${result.status} | Score ${result.score}/100\nSOP ${result.policy.pageId} v${result.policy.version} | ${result.checkedAt}\n${result.checks.map(c => `${c.outcome}: ${c.rule} — ${c.detail}${c.remediation ? `\nRemediation steps: ${c.remediation}` : ''}`).join('\n')}\n${result.notice}`;
+  const lines = [
+    'Policy Compliance Copilot',
+    `${result.status} | Score ${result.score}/100`,
+    `SOP ${result.policy.pageId} v${result.policy.version} | ${result.checkedAt}`,
+    ...result.checks.map(check => `${check.outcome}: ${check.rule} — ${check.detail}${check.remediation ? ` Remediation steps: ${check.remediation}` : ''}`),
+    result.notice,
+  ];
   const response = await api.asUser().requestJira(route`/rest/api/3/issue/${result.issueKey}/comment`, {
     method: 'POST', headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ body: { type: 'doc', version: 1, content: [{ type: 'paragraph', content: [{ type: 'text', text }] }] } }),
+    // ADF text nodes do not render \n; one paragraph per line keeps the comment readable.
+    body: JSON.stringify({ body: { type: 'doc', version: 1, content: lines.map(paragraph) } }),
   });
   const comment = await jsonResponse(response, 'Audit comment creation');
   return { commentId: comment.id, result };
