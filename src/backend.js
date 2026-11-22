@@ -31,7 +31,9 @@ export function getSamplePolicy() {
 export async function searchPolicyPages({ query } = {}) {
   const title = typeof query === 'string' ? query.trim() : '';
   if (title.length > 200) throw new Error('Search text is too long.');
-  const path = `/wiki/api/v2/pages?limit=25&sort=-modified-date${title ? `&title=${encodeURIComponent(title)}` : ''}`;
+  const path = title
+    ? route`/wiki/api/v2/pages?limit=25&sort=-modified-date&title=${title}`
+    : route`/wiki/api/v2/pages?limit=25&sort=-modified-date`;
   const data = await jsonResponse(await api.asUser().requestConfluence(path), 'Policy page search');
   return (Array.isArray(data.results) ? data.results : [])
     .filter(page => page && page.id && page.title)
@@ -56,8 +58,10 @@ async function readIssue(issueKey) {
   return { key: issue.key, facts };
 }
 export async function checkIssueCompliance({ issueKey, policyPageId, useSamplePolicy } = {}) {
-  // useSamplePolicy must be strictly true; any other value reads the real page.
-  const [issue, policy] = await Promise.all([readIssue(issueKey), useSamplePolicy === true ? samplePolicy() : getPolicyRules({ policyPageId })]);
+  // The sample is used only when no page is supplied. If Rovo passes both, the
+  // real page wins so a verdict can never silently switch to a different policy.
+  const useSample = useSamplePolicy === true && !policyPageId;
+  const [issue, policy] = await Promise.all([readIssue(issueKey), useSample ? samplePolicy() : getPolicyRules({ policyPageId })]);
   const result = { ...evaluate(issue.facts, policy.rules), issueKey: issue.key, policy: { pageId: policy.pageId, title: policy.title, version: policy.version }, checkedAt: new Date().toISOString() };
   // Deterministic only: no external model can change the verdict.
   return result;
@@ -92,7 +96,8 @@ export async function buildRemediationPlan(input = {}) {
     policy: result.policy,
     status: result.status,
     score: result.score,
-    readyToSubmit: result.status === 'COMPLIANT',
+    allSupportedChecksPass: result.status === 'COMPLIANT',
+    financeVerificationRequired: true,
     summary: steps.length ? `${steps.length} finding(s) must be resolved before Finance review.` : 'All supported checks pass. Finance must still verify evidence content and approval authority.',
     steps,
     checklist: result.checks.map(check => ({ rule: check.rule, outcome: check.outcome, detail: check.detail })),
@@ -119,6 +124,7 @@ function checklistDocument(plan) {
 }
 export async function postComplianceChecklist(input = {}) {
   // Writes only after an explicit confirmation from the current conversation.
+  // The CREATE actionVerb also keeps automation-triggered agents from invoking it.
   if (input.confirmed !== true) throw new Error('Explicit user confirmation is required before writing a checklist to the issue.');
   const plan = await buildRemediationPlan(input);
   const response = await api.asUser().requestJira(route`/rest/api/3/issue/${plan.issueKey}/comment`, {

@@ -49,22 +49,27 @@ const compliance = require('../src/compliance.cjs');
   assert.equal(result.policy.version, 4);
 
   // One-click path: no Confluence page read, same deterministic engine.
-  const sampleResult = await checkIssueCompliance({ ...input, useSamplePolicy: true });
+  const sampleResult = await checkIssueCompliance({ issueKey: 'FIN-1', useSamplePolicy: true });
   assert.equal(sampleResult.policy.pageId, 'built-in');
   assert.equal(sampleResult.status, 'COMPLIANT');
+  // A supplied page ID wins over the sample flag; no silent policy switch.
+  const both = await checkIssueCompliance({ ...input, useSamplePolicy: true });
+  assert.equal(both.policy.pageId, '42');
+  assert.equal(both.policy.version, 4);
   assert.equal(getSamplePolicy().rules.minimumQuotes, 3);
   assert.deepEqual(await searchPolicyPages({}), [{ id: '42', title: 'Finance SOP' }]);
 
   // Rovo artifact: compliant issue has a checklist but no remediation steps.
   const cleanPlan = await buildRemediationPlan(input);
-  assert.equal(cleanPlan.readyToSubmit, true);
+  assert.equal(cleanPlan.allSupportedChecksPass, true);
+  assert.equal(cleanPlan.financeVerificationRequired, true);
   assert.equal(cleanPlan.steps.length, 0);
   assert.ok(cleanPlan.checklist.length >= 4);
 
   attachments = [];
   assert.equal((await checkIssueCompliance(input)).status, 'NEEDS_REVIEW');
   const plan = await buildRemediationPlan(input);
-  assert.equal(plan.readyToSubmit, false);
+  assert.equal(plan.allSupportedChecksPass, false);
   assert.ok(plan.steps.length > 0);
   for (const step of plan.steps) assert.ok(step.action?.length > 10);
 

@@ -8,6 +8,7 @@ const App = () => {
   const [context, setContext] = useState(null);
   const [pageId, setPageId] = useState('');
   const [pages, setPages] = useState([]);
+  const [policyTitle, setPolicyTitle] = useState('');
   const [selectedPage, setSelectedPage] = useState(null);
   const [useSample, setUseSample] = useState(false);
   const [result, setResult] = useState(null);
@@ -19,10 +20,12 @@ const App = () => {
   useEffect(() => {
     view.getContext().then(value => {
       setContext(value);
-      setPageId(value.extension?.content?.id || '');
+      setPageId(String(value.extension?.content?.id || ''));
+      // Confluence is optional and the picker is only needed in Jira.
+      if (value.extension?.issue?.key) {
+        invoke('searchPolicyPages', {}).then(setPages).catch(() => setPages([]));
+      }
     }).catch(() => setError('Context is unavailable. Close and reopen the panel.'));
-    // Best effort: Confluence may not be connected, so a failure only hides the picker.
-    invoke('searchPolicyPages', {}).then(setPages).catch(() => setPages([]));
   }, []);
 
   const issueKey = context?.extension?.issue?.key;
@@ -40,12 +43,29 @@ const App = () => {
     setBusy(true);
     resetOutput();
     try {
-      setPolicy(await invoke('getSamplePolicy'));
+      const sample = await invoke('getSamplePolicy');
+      if (issueKey) setResult(await invoke('checkIssueCompliance', { issueKey, useSamplePolicy: true }));
+      setPolicy(sample);
       setUseSample(true);
       setSelectedPage(null);
       setPageId('');
     } catch (failure) {
       setError(failure.message || 'The sample policy could not be loaded.');
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const searchPages = async () => {
+    setBusy(true);
+    setError('');
+    try {
+      const matches = await invoke('searchPolicyPages', { query: policyTitle });
+      setPages(matches);
+      if (matches.length === 1) selectPage({ label: matches[0].title, value: matches[0].id });
+      if (!matches.length) setMessage('No matching Confluence pages found. Check the exact page title.');
+    } catch (failure) {
+      setError(failure.message || 'Confluence pages could not be searched.');
     } finally {
       setBusy(false);
     }
@@ -74,6 +94,11 @@ const App = () => {
       <Heading as="h2">Policy Compliance Copilot</Heading>
       <Text>Pre-Finance Compliance Gatekeeper: Catch missing quotes, approval gaps, and policy violations before finance review</Text>
 
+      {issueKey && <Stack space="space.100">
+        <Label labelFor="policy-title">Search by exact SOP page title</Label>
+        <Textfield id="policy-title" value={policyTitle} isDisabled={busy} onChange={event => setPolicyTitle(event.target.value)} />
+        <Button isDisabled={busy || !policyTitle.trim()} onClick={searchPages}>Search Confluence</Button>
+      </Stack>}
       <Label labelFor="policy-select">Confluence SOP page</Label>
       <Select
         id="policy-select"
@@ -87,7 +112,7 @@ const App = () => {
       <Textfield
         id="policy-page"
         value={pageId}
-        isDisabled={busy || useSample}
+        isDisabled={busy}
         onChange={event => {
           setPageId(event.target.value);
           setSelectedPage(null);
@@ -96,7 +121,7 @@ const App = () => {
         }}
       />
       <Text>No Confluence page yet? Use the built-in sample SOP to try every check immediately.</Text>
-      <Button isDisabled={busy} onClick={loadSample}>Use Built-in Sample SOP</Button>
+      <Button isDisabled={busy} onClick={loadSample}>{issueKey ? 'Run Sample SOP Audit' : 'Use Built-in Sample SOP'}</Button>
       <Button isDisabled={!context || busy || !pageId.trim()} onClick={() => perform('getPolicyRules')}>Load Policy Rules</Button>
       {issueKey && <Button appearance="primary" isDisabled={busy || !canCheck} onClick={() => perform('checkIssueCompliance')}>Run Compliance Check</Button>}
       {busy && <Text>Processing…</Text>}
@@ -108,7 +133,7 @@ const App = () => {
       </SectionMessage>}
       {result && <Stack space="space.150">
         <Heading as="h3">{result.status} — {result.score}/100</Heading>
-        <ProgressBar value={result.score} />
+        <ProgressBar value={result.score / 100} appearance={result.status === 'COMPLIANT' ? 'success' : 'default'} ariaLabel={`Compliance score ${result.score} out of 100`} />
         <Text>{result.policy.title} — v{result.policy.version} — {result.checkedAt}</Text>
         <Text>Evidence detected: {result.evidence.attachmentCount ?? 'unknown'} attachments; {result.evidence.linkCount} document links.</Text>
         <DynamicTable
