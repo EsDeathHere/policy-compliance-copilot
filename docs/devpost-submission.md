@@ -12,13 +12,13 @@ Procurement requests reach Finance with missing vendor quotes, unsupported amoun
 
 ## What it does
 
-Policy Compliance Copilot turns a Confluence procurement SOP into a deterministic pre-Finance gate inside Jira:
+Policy Compliance Copilot turns a Confluence procurement SOP into deterministic pre-Finance screening inside Jira:
 
 - Reads the SOP as the invoking user and extracts reviewed rules from JSON, a table, or a fixed key-value format.
 - Reads the Jira issue's amount, currency, quote count, category, vendor, approval reference, attachments, and description links.
 - Returns `COMPLIANT`, `NEEDS_REVIEW`, or `NON_COMPLIANT` with a 0–100 score, a rule-by-rule table, the SOP clause behind each rule, and concrete remediation steps.
 - Writes an audit comment or a compliance checklist only when the user explicitly clicks the button in the Jira issue panel.
-- Ships a built-in sample SOP so a judge can evaluate an issue in under two minutes without creating a Confluence page.
+- Ships a built-in sample SOP so a judge can evaluate an issue without creating a Confluence page.
 
 The Rovo Agent adds a conversational layer: it finds a policy page, runs the same deterministic checks, and produces a numbered remediation plan plus a rule checklist. It cannot change the verdict.
 
@@ -44,7 +44,9 @@ flowchart TD
   B -->|asUser: read issue fields| JR[Jira REST API]
   B -->|asUser: read SOP page or list pages| CR[Confluence REST API]
   B --> L[Local deterministic evaluator]
-  B -->|Explicit write; recheck first| W[asUser: Jira comment API]
+  J -->|Explicit publish click| W[Write resolver rechecks through shared backend]
+  W --> B
+  W -->|asUser| JC[Jira comment API]
 ```
 
 Every request is evaluated in memory. Source content is not indexed or cached. Only an explicitly requested Jira comment persists, and it remains under Jira permissions and retention controls.
@@ -61,17 +63,19 @@ Every request is evaluated in memory. Source content is not indexed or cached. O
 
 1. Install the app on a Jira site. Confluence is optional for the sample path.
 2. Open any Jira issue → **Policy Compliance Copilot**.
-3. Click **Use Built-in Sample SOP** → **Run Compliance Check**.
+3. Click **Run Sample SOP Audit**.
 4. Edit the Description to flip the verdict, then click **Insert Compliance Checklist**.
 5. In Rovo, ask: “Find a procurement SOP and audit this issue” or “Build a step-by-step plan to reach a compliant score”.
 
 ## Category positioning
 
-- **Main track:** deterministic compliance gate with a complete Jira + Confluence + Rovo workflow.
-- **Best Rovo Agent:** the agent searches policy, audits, and generates a remediation plan and checklist, with publishing handled by an explicit click in Jira.
-- **MCP:** read-only tools expose the same engine to approved clients; external exposure is off by default.
+- **Main track:** deterministic compliance screening with a complete Jira + Confluence + Rovo workflow.
+- **Best Agents - Rovo/Assignable agents:** the agent searches policy, audits, and generates a remediation plan and checklist, with publishing handled by an explicit click in Jira.
+- **Best app with Atlassian MCP:** read-only tools expose the same engine to approved clients; external exposure is off by default.
 
 > The app intentionally does not use browser-side WebMCP. It targets Atlassian's Rovo Agent and `rovo:mcp` modules and stays on Forge UI Kit.
+
+The [official Codegeist 2026 rules](https://codegeist2026.devpost.com/rules) list the bonus categories and five equally weighted judging criteria: Technological Implementation, Design, Potential Impact, Innovation/Idea, and Presentation.
 
 ## Challenges
 

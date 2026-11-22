@@ -10,11 +10,11 @@ Jira issue panel, Confluence SOP byline, Rovo agent, read-only MCP tools. Englis
 
 **Demo scope:** user-triggered checks against a selected Confluence SOP or a bundled sample SOP. No autonomous payment approval, background monitoring, or verified attachment analysis. Use synthetic issues and SOPs only.
 
-### 2-minute quickstart
+### Judge quickstart
 
 1. Install the app on a Jira site. Confluence is optional for the built-in sample path.
 2. Open any Jira issue and choose **Policy Compliance Copilot** in the issue panel.
-3. Click **Use Built-in Sample SOP**, then **Run Compliance Check**.
+3. Click **Run Sample SOP Audit**.
 4. Inspect the score bar, the rule-by-rule table, and the SOP clause for each rule.
 5. Change the issue Description (see [Issue format](#issue-format)) and rerun to see `COMPLIANT`, `NEEDS_REVIEW`, and `NON_COMPLIANT`.
 6. Click **Insert Compliance Checklist** to write the checklist and remediation plan as a Jira comment.
@@ -53,7 +53,7 @@ flowchart TD
 
 ### Suggested judging walkthrough
 
-1. Open the issue panel and click **Use Built-in Sample SOP**. The bundled rules are examples, not an official policy.
+1. Open the issue panel and click **Run Sample SOP Audit**. The bundled rules are examples, not an official policy.
 2. Create a Jira issue using the example Description below. With `Amount: 12000`, `Currency: USD`, `Quote count: 3`, category `software`, vendor and approval reference present, attach a synthetic quote file or add `Evidence: https://example.com/quotes`. Expect `COMPLIANT` for the supported rules.
 3. Remove all attachments and evidence links: expect `NEEDS_REVIEW` plus remediation guidance. Change `Quote count` to `2`: expect `NON_COMPLIANT`. Remove the amount: expect `NEEDS_REVIEW`.
 4. Click **Insert Compliance Checklist** to persist a freshly recomputed checklist and plan. Inspect the SOP source and timestamp in the comment.
@@ -170,7 +170,31 @@ Backend checks use Node's experimental VM modules to stub Forge product boundari
 - Evidence checks confirm presence, not authenticity or quote content.
 - Arbitrary prose SOPs are not interpreted; use JSON, a table, or the exact key-value labels.
 - Approval authority and spending limits remain a human Finance decision.
-- Confluence page listing uses the existing `read:page:confluence` scope and shows recent pages; use the ID field for older pages.
+- Confluence page listing uses the existing `read:page:confluence` scope. Select a recent page, search by exact title, or enter the page ID.
+
+## Release checklist
+
+Run from the app root using the existing Forge app registration. This release adds no scopes. Removing external egress can require a major-version upgrade, so check the version reported by deployment before upgrading an installation.
+
+```sh
+npm test
+npm run lint
+forge lint
+forge deploy --non-interactive -e development
+forge install list
+forge install --non-interactive --upgrade --site "$DEV_SITE" --product jira --environment development
+```
+
+Run the upgrade command for an existing development installation if its major version is behind. For a fresh installation, omit `--upgrade`. Connect Confluence on the same site for the live SOP flow. Smoke-test all three verdicts, the real SOP picker, checklist and audit comments, the Rovo remediation plan, and read-only MCP tools in Rovo Studio.
+
+After development sign-off and production approval:
+
+1. Confirm the Developer Console app ID matches the manifest and the existing shared installation link.
+2. Run `forge deploy --non-interactive -e production` and inspect the resulting major version. If the installed version is behind, upgrade the test site with `forge install --non-interactive --upgrade --site "$PROD_TEST_SITE" --product jira --environment production`. External site admins can upgrade eligible installations via the shared installation link.
+3. In Developer Console, open **Distribution**, confirm sharing is active and copy the installation link. Verify it as a site admin on a separate judge-like test site. Reuse the existing Devpost URL if it still works. If it changed, replace the URL in the Devpost submission after verifying the replacement.
+4. Check the live description and demo video against the deployed behavior, including Jira-panel publication and read-only Rovo and MCP tools.
+
+The optional workflow gate is deferred. Jira workflow validators are in Preview, and a synchronous check of a separate Confluence installation would add a dependency to Jira transitions.
 
 ## License
 
