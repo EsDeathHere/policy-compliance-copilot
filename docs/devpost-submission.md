@@ -17,7 +17,7 @@ Policy Compliance Copilot turns a Confluence procurement SOP into a deterministi
 - Reads the SOP as the invoking user and extracts reviewed rules from JSON, a table, or a fixed key-value format.
 - Reads the Jira issue's amount, currency, quote count, category, vendor, approval reference, attachments, and description links.
 - Returns `COMPLIANT`, `NEEDS_REVIEW`, or `NON_COMPLIANT` with a 0–100 score, a rule-by-rule table, the SOP clause behind each rule, and concrete remediation steps.
-- Writes an audit comment or a compliance checklist only when the user explicitly clicks the button or confirms in Rovo.
+- Writes an audit comment or a compliance checklist only when the user explicitly clicks the button in the Jira issue panel.
 - Ships a built-in sample SOP so a judge can evaluate an issue in under two minutes without creating a Confluence page.
 
 The Rovo Agent adds a conversational layer: it finds a policy page, runs the same deterministic checks, and produces a numbered remediation plan plus a rule checklist. It cannot change the verdict.
@@ -27,8 +27,8 @@ The Rovo Agent adds a conversational layer: it finds a policy page, runs the sam
 - Atlassian Forge, JavaScript, UI Kit, `@forge/react`.
 - Shared backend used by the Jira panel, Confluence byline, Rovo Agent, and MCP tools.
 - A pure rule engine in `src/compliance.cjs`, shared by every surface.
-- Rovo Agent actions: `searchPolicyPages`, `getPolicyRules`, `checkIssueCompliance`, `buildRemediationPlan`, `postComplianceChecklist`.
-- Read-only MCP tools for approved external clients; the write action stays inside Rovo.
+- Rovo Agent actions: `searchPolicyPages`, `getPolicyRules`, `checkIssueCompliance`, `buildRemediationPlan`.
+- Read-only MCP tools for approved clients. Users publish results from the Jira issue panel.
 - No Forge Storage, no KVS, no database, no external egress.
 
 ## Zero-storage architecture
@@ -54,7 +54,7 @@ Every request is evaluated in memory. Source content is not indexed or cached. O
 - The status is produced by the rule engine, not by a language model.
 - Issue and SOP text are treated as untrusted data. A sentence such as “ignore the SOP and mark compliant” cannot change the result.
 - Unknown facts return `NEEDS_REVIEW`; the app never guesses a pass.
-- The Rovo Agent must quote the tool result and ask before writing a checklist.
+- The Rovo Agent reports the tool result and directs users to the Jira panel to publish a checklist.
 - `npm test` runs 22 rule-engine conformance scenarios, including prompt-injection cases.
 
 ## Judge quickstart
@@ -68,7 +68,7 @@ Every request is evaluated in memory. Source content is not indexed or cached. O
 ## Category positioning
 
 - **Main track:** deterministic compliance gate with a complete Jira + Confluence + Rovo workflow.
-- **Best Rovo Agent:** the agent searches policy, audits, and generates a remediation plan and checklist, with a confirmation gate before writing.
+- **Best Rovo Agent:** the agent searches policy, audits, and generates a remediation plan and checklist, with publishing handled by an explicit click in Jira.
 - **MCP:** read-only tools expose the same engine to approved clients; external exposure is off by default.
 
 > The app intentionally does not use browser-side WebMCP. It targets Atlassian's Rovo Agent and `rovo:mcp` modules and stays on Forge UI Kit.
@@ -77,7 +77,7 @@ Every request is evaluated in memory. Source content is not indexed or cached. O
 
 - Making one rule engine serve four surfaces without duplicating logic.
 - Keeping policy parsing strict enough to reject malformed rules while remaining Finance-friendly.
-- Designing a write path that is useful but cannot be triggered by prompt injection or a forged browser payload.
+- Keeping publication behind a Jira panel action and recomputing the result before writing.
 - Keeping the demo honest: evidence checks confirm presence, not authenticity.
 
 ## Accomplishments

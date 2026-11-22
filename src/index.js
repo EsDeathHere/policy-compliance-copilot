@@ -6,5 +6,4 @@ export {
   getSamplePolicy,
   searchPolicyPages,
   buildRemediationPlan,
-  postComplianceChecklist,
 } from './backend';

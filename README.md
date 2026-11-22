@@ -49,7 +49,7 @@ flowchart TD
 
 **Data lifecycle:** source data is fetched on demand and evaluated in memory; no app-managed database, persistent cache, or source-content index. Explicit audit comments and checklists persist in Jira. See [PRIVACY.md](PRIVACY.md) for the full boundaries.
 
-**Authorization:** every product REST operation uses `api.asUser()`. Jira is the required app; Confluence must be connected on the same site for the real-SOP path. Read-only Rovo/MCP tools do not create comments. `write:jira-work` is used only by the explicit UI buttons and the confirmed checklist action.
+**Authorization:** every product REST operation uses `api.asUser()`. Jira is the required app; Confluence must be connected on the same site for the real-SOP path. Read-only Rovo/MCP tools do not create comments. `write:jira-work` is used only by the explicit UI buttons.
 
 ### Suggested judging walkthrough
 
@@ -128,15 +128,14 @@ This is **evidence-presence screening**, not document verification: any attachme
 
 ## Rovo / MCP
 
-Official module name is `action`, not `rovo:action`. All tools use explicit inputs:
+Official module name is `action`, not `rovo:action`. Read-only tools and inputs:
 
 - `getPolicyRules({ policyPageId })`
 - `searchPolicyPages({ query })` — recent pages, optional exact-title filter
 - `checkIssueCompliance({ issueKey, policyPageId, useSamplePolicy })`
 - `buildRemediationPlan({ issueKey, policyPageId, useSamplePolicy })` — numbered plan plus rule checklist; read-only
-- `postComplianceChecklist({ issueKey, policyPageId, useSamplePolicy, confirmed })` — writes a Jira comment only when `confirmed` is `true`
 
-The Rovo Agent instructions require a tool-derived verdict, forbid inventing policy or scores, and require explicit user confirmation before the checklist write. The write action uses `actionVerb: CREATE`, which automation-triggered agents cannot invoke, and is not exposed through MCP.
+The Rovo Agent reports the tool-derived verdict and produces a remediation plan. When invoked from a Jira issue, the audit and plan tools can use the issue context supplied by Forge. In standalone chat, provide the issue key. To publish a checklist, open the same issue, select the same SOP, and click **Insert Compliance Checklist** in the Jira panel. The panel rechecks current data before posting.
 
 All product requests use `api.asUser()`. No app-privileged fallback. Rovo unattended automation without user context is not supported.
 

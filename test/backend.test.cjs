@@ -47,6 +47,8 @@ const compliance = require('../src/compliance.cjs');
   const result = await checkIssueCompliance(input);
   assert.equal(result.status, 'COMPLIANT');
   assert.equal(result.policy.version, 4);
+  const context = { jira: { resourceType: 'issue', issueKey: 'FIN-1' } };
+  assert.equal((await checkIssueCompliance({ policyPageId: '42', context })).issueKey, 'FIN-1');
 
   // One-click path: no Confluence page read, same deterministic engine.
   const sampleResult = await checkIssueCompliance({ issueKey: 'FIN-1', useSamplePolicy: true });

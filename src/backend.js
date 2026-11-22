@@ -57,11 +57,13 @@ async function readIssue(issueKey) {
   }
   return { key: issue.key, facts };
 }
-export async function checkIssueCompliance({ issueKey, policyPageId, useSamplePolicy } = {}) {
+export async function checkIssueCompliance({ issueKey, policyPageId, useSamplePolicy, context } = {}) {
+  // Forge supplies Jira context for actions invoked from an issue view. API access still uses asUser().
+  const activeIssue = context?.jira?.resourceType === 'issue' ? context.jira.issueKey : undefined;
   // The sample is used only when no page is supplied. If Rovo passes both, the
   // real page wins so a verdict can never silently switch to a different policy.
   const useSample = useSamplePolicy === true && !policyPageId;
-  const [issue, policy] = await Promise.all([readIssue(issueKey), useSample ? samplePolicy() : getPolicyRules({ policyPageId })]);
+  const [issue, policy] = await Promise.all([readIssue(issueKey ?? activeIssue), useSample ? samplePolicy() : getPolicyRules({ policyPageId })]);
   const result = { ...evaluate(issue.facts, policy.rules), issueKey: issue.key, policy: { pageId: policy.pageId, title: policy.title, version: policy.version }, checkedAt: new Date().toISOString() };
   // Deterministic only: no external model can change the verdict.
   return result;
@@ -123,8 +125,7 @@ function checklistDocument(plan) {
   return { type: 'doc', version: 1, content };
 }
 export async function postComplianceChecklist(input = {}) {
-  // Writes only after an explicit confirmation from the current conversation.
-  // The CREATE actionVerb also keeps automation-triggered agents from invoking it.
+  // The explicit Jira panel operation is the only entry point for this write.
   if (input.confirmed !== true) throw new Error('Explicit user confirmation is required before writing a checklist to the issue.');
   const plan = await buildRemediationPlan(input);
   const response = await api.asUser().requestJira(route`/rest/api/3/issue/${plan.issueKey}/comment`, {

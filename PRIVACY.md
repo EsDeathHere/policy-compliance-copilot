@@ -37,7 +37,7 @@ The manifest declares no `permissions.external.fetch` entries. The app calls onl
 
 ### Rovo MCP clients
 
-Tools return data to their caller. `getPolicyRules` returns extracted policy text as well as structured rules and source metadata; a compliance check returns findings, and a remediation plan returns steps and a checklist. External MCP exposure is disabled by default and requires administrator activation. The write action that posts a checklist is available to the Rovo Agent only and is not exposed as an MCP tool. External clients may store tool results or conversation history under their own policies. Enable only approved clients and tools; the app cannot delete copies retained by them.
+Tools return data to their caller. `getPolicyRules` returns extracted policy text as well as structured rules and source metadata; a compliance check returns findings, and a remediation plan returns steps and a checklist. External MCP exposure is disabled by default and requires administrator activation. Posting a checklist requires an explicit action in the Jira issue panel. The Rovo and MCP tools are read-only. External clients may store tool results or conversation history under their own policies. Enable only approved clients and tools; the app cannot delete copies retained by them.
 
 ## Retention, deletion and controls
 
