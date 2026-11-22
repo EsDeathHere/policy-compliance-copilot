@@ -33,7 +33,7 @@ Forge operates on Atlassian infrastructure. Runtime diagnostics, errors, access 
 
 ### No external egress
 
-The manifest declares no `permissions.external.fetch` entries. The app calls only Atlassian product REST APIs through Forge; it does not send Jira or Confluence content to any third-party service. There is no wildcard egress, no external model provider, and no credential configuration for one.
+The manifest declares no `permissions.external.fetch` entries. Outbound requests from the Forge app go only to Atlassian product REST APIs. An administrator can separately enable external MCP clients to receive tool results through Atlassian, as described below.
 
 ### Rovo MCP clients
 
