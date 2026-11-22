@@ -73,3 +73,51 @@ export async function addAuditComment(input) {
   const comment = await jsonResponse(response, 'Audit comment creation');
   return { commentId: comment.id, result };
 }
+// Structured artifact for the Rovo Agent: a numbered plan plus a rule checklist.
+// The verdict and steps come only from the deterministic engine, never from model text.
+export async function buildRemediationPlan(input = {}) {
+  const result = await checkIssueCompliance(input);
+  const steps = result.checks
+    .filter(check => check.outcome !== 'PASS')
+    .map((check, index) => ({ step: index + 1, rule: check.rule, outcome: check.outcome, finding: check.detail, action: check.remediation }));
+  return {
+    issueKey: result.issueKey,
+    policy: result.policy,
+    status: result.status,
+    score: result.score,
+    readyToSubmit: result.status === 'COMPLIANT',
+    summary: steps.length ? `${steps.length} finding(s) must be resolved before Finance review.` : 'All supported checks pass. Finance must still verify evidence content and approval authority.',
+    steps,
+    checklist: result.checks.map(check => ({ rule: check.rule, outcome: check.outcome, detail: check.detail })),
+    notice: result.notice,
+  };
+}
+// ADF helpers: text nodes do not render \n, so every line becomes its own block.
+const textNode = text => ({ type: 'text', text });
+const paragraph = text => ({ type: 'paragraph', content: [textNode(text)] });
+const list = (type, items) => ({ type, content: items.map(item => ({ type: 'listItem', content: [paragraph(item)] })) });
+function checklistDocument(plan) {
+  const content = [
+    paragraph('Policy Compliance Copilot — compliance checklist'),
+    paragraph(`${plan.status} | Score ${plan.score}/100 | SOP ${plan.policy.pageId} v${plan.policy.version}`),
+    paragraph('Rule checklist'),
+    list('bulletList', plan.checklist.map(item => `${item.outcome} — ${item.rule}: ${item.detail}`)),
+  ];
+  if (plan.steps.length) {
+    content.push(paragraph('Remediation plan'));
+    content.push(list('orderedList', plan.steps.map(item => `[${item.rule}] ${item.action}`)));
+  }
+  content.push(paragraph(plan.notice));
+  return { type: 'doc', version: 1, content };
+}
+export async function postComplianceChecklist(input = {}) {
+  // Writes only after an explicit confirmation from the current conversation.
+  if (input.confirmed !== true) throw new Error('Explicit user confirmation is required before writing a checklist to the issue.');
+  const plan = await buildRemediationPlan(input);
+  const response = await api.asUser().requestJira(route`/rest/api/3/issue/${plan.issueKey}/comment`, {
+    method: 'POST', headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ body: checklistDocument(plan) }),
+  });
+  const comment = await jsonResponse(response, 'Checklist creation');
+  return { commentId: comment.id, status: plan.status, score: plan.score, issueKey: plan.issueKey };
+}
