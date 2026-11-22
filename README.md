@@ -143,7 +143,7 @@ All product requests use `api.asUser()`. No app-privileged fallback. Rovo unatte
 `rovo:mcp` and third-party client connectivity are Preview (official reference updated 2026-10-29). External exposure is disabled by default; an admin must enable tools per site installation. Do not expose financial data without approval. Client endpoint after authorized installation:
 
 ```text
-https://mcp.atlassian.com/forge/3df828b1-49e0-4dc9-971d-fd1c6319c33d
+https://mcp.atlassian.com/forge/3df828b1-49e0-4dc9-971d-fd1c6319c55d
 ```
 
 Third-party clients authenticate through Atlassian OAuth; no custom public webtrigger.
