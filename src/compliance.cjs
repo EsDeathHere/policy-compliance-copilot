@@ -61,13 +61,18 @@ function parsePolicy(input) {
       !Array.isArray(rules.prohibitedCategories) || rules.prohibitedCategories.some(v => typeof v !== 'string' || !v.trim())) {
     throw new Error('Policy requires quoteThresholds, minimumQuotes and prohibitedCategories.');
   }
-  return { ...rules, prohibitedCategories: rules.prohibitedCategories.map(value => value.trim().toLowerCase()), supported: true };
+  const { quoteThresholds, minimumQuotes, approvalThresholds } = rules;
+  return { quoteThresholds, minimumQuotes, ...(approvalThresholds && { approvalThresholds }), prohibitedCategories: rules.prohibitedCategories.map(value => value.trim().toLowerCase()), supported: true };
 }
 
 function issueFacts(fields) {
   const description = plainText(fields.description);
   const text = `${fields.summary || ''}\n${description}`;
-  const field = label => text.match(new RegExp(`^${label}:[ \\t]*(.+)$`, 'im'))?.[1]?.trim();
+  const field = label => {
+    // Repeated declarations are ambiguous, even when one of them is blank.
+    const matches = [...text.matchAll(new RegExp(`^${label}:[ \\t]*([^\\r\\n]*)`, 'gim'))];
+    return matches.length === 1 ? matches[0][1].trim() : undefined;
+  };
   const amount = field('Amount');
   const quotes = field('Quote count');
   const links = new Set();
@@ -94,26 +99,26 @@ function issueFacts(fields) {
 
 function evaluate(facts, policy) {
   const checks = [];
-  const add = (rule, outcome, detail, remediation) => checks.push({ rule, outcome, detail, ...(outcome !== 'PASS' ? { remediation } : {}) });
-  if (!policy.supported) add('policy', 'UNKNOWN', 'No complete supported policy configuration was found.', 'Ask Finance to provide a reviewed JSON policy or a complete policy table/key-value list, then rerun the check.');
+  const add = (rule, outcome, detail, remediation, source) => checks.push({ rule, outcome, detail, source, ...(outcome !== 'PASS' ? { remediation } : {}) });
+  if (!policy.supported) add('policy', 'UNKNOWN', 'No complete supported policy configuration was found.', 'Ask Finance to provide a reviewed JSON policy or a complete policy table/key-value list, then rerun the check.', 'No supported policy clause was found on the selected page.');
   else {
     const validCurrency = typeof facts.currency === 'string' && /^[A-Z]{3}$/.test(facts.currency);
     const threshold = validCurrency && Object.hasOwn(policy.quoteThresholds, facts.currency) ? policy.quoteThresholds[facts.currency] : undefined;
     const validAmount = Number.isFinite(facts.amount) && facts.amount >= 0;
-    add('amount', validAmount && threshold !== undefined ? 'PASS' : 'UNKNOWN', 'The amount must be explicit and its currency supported by the SOP.', 'Enter an ungrouped Amount (for example 12000) and a supported Currency (for example USD); ask Finance to configure missing currency thresholds.');
+    add('amount', validAmount && threshold !== undefined ? 'PASS' : 'UNKNOWN', 'The amount must be explicit and its currency supported by the SOP.', 'Enter an ungrouped Amount (for example 12000) and a supported Currency (for example USD); ask Finance to configure missing currency thresholds.', `Quote threshold ${facts.currency || '(missing currency)'}: ${threshold ?? 'not configured'}.`);
     if (validAmount && threshold !== undefined && facts.amount > threshold) {
       const validCount = Number.isInteger(facts.quoteCount) && facts.quoteCount >= 0;
       const declared = validCount && facts.quoteCount >= policy.minimumQuotes;
       const evidence = (Number.isInteger(facts.attachmentCount) && facts.attachmentCount > 0) || facts.evidenceLinkCount > 0;
       const outcome = !validCount ? 'UNKNOWN' : !declared ? 'FAIL' : evidence ? 'PASS' : 'UNKNOWN';
-      add('vendor-quotes', outcome, `At least ${policy.minimumQuotes} quotes are required above ${threshold} ${facts.currency}. Detected: ${facts.attachmentCount ?? 'unknown'} attachments, ${facts.evidenceLinkCount ?? 0} document links. ${declared && !evidence ? 'The declared quote count meets the requirement, but no supporting attachment or document link was found.' : 'Evidence presence does not verify quote content, authenticity or distinct vendors.'}`, `Obtain at least ${policy.minimumQuotes} vendor quotes, update Quote count, and attach the quote documents or add HTTP/HTTPS evidence links to Description. Rerun the check; Finance must verify the documents.`);
+      add('vendor-quotes', outcome, `At least ${policy.minimumQuotes} quotes are required above ${threshold} ${facts.currency}. Detected: ${facts.attachmentCount ?? 'unknown'} attachments, ${facts.evidenceLinkCount ?? 0} document links. ${declared && !evidence ? 'The declared quote count meets the requirement, but no supporting attachment or document link was found.' : 'Evidence presence does not verify quote content, authenticity or distinct vendors.'}`, `Obtain at least ${policy.minimumQuotes} vendor quotes, update Quote count, and attach the quote documents or add HTTP/HTTPS evidence links to Description. Rerun the check; Finance must verify the documents.`, `Minimum quotes: ${policy.minimumQuotes}; Quote threshold ${facts.currency}: ${threshold}.`);
     }
     const category = facts.category?.trim().toLowerCase();
-    add('category', category ? (policy.prohibitedCategories.includes(category) ? 'FAIL' : 'PASS') : 'UNKNOWN', 'The declared category is checked against the SOP prohibited categories.', 'Provide the accurate Category. If prohibited, remove the prohibited purchase or obtain a documented Finance policy decision; do not relabel it to bypass the rule.');
-    add('vendor', facts.vendor?.trim() ? 'PASS' : 'UNKNOWN', 'A vendor must be identified.', 'Provide the vendor name in Vendor or the configured Jira vendor field.');
+    add('category', category ? (policy.prohibitedCategories.includes(category) ? 'FAIL' : 'PASS') : 'UNKNOWN', 'The declared category is checked against the SOP prohibited categories.', 'Provide the accurate Category. If prohibited, remove the prohibited purchase or obtain a documented Finance policy decision; do not relabel it to bypass the rule.', `Prohibited categories: ${policy.prohibitedCategories.length ? policy.prohibitedCategories.join(', ') : 'none'}.`);
+    add('vendor', facts.vendor?.trim() ? 'PASS' : 'UNKNOWN', 'A vendor must be identified.', 'Provide the vendor name in Vendor or the configured Jira vendor field.', 'A vendor must be identified.');
     const approval = validCurrency && policy.approvalThresholds && Object.hasOwn(policy.approvalThresholds, facts.currency) ? policy.approvalThresholds[facts.currency] : undefined;
     if (validAmount && approval !== undefined && facts.amount > approval) {
-      add('approval', facts.approvalReference?.trim() ? 'PASS' : 'UNKNOWN', `An approval reference is required above ${approval} ${facts.currency}. Approval validity still requires human verification.`, 'Obtain approval from the authorized approver and add the approval ticket or document reference to Approval reference, then rerun the check.');
+      add('approval', facts.approvalReference?.trim() ? 'PASS' : 'UNKNOWN', `An approval reference is required above ${approval} ${facts.currency}. Approval validity still requires human verification.`, 'Obtain approval from the authorized approver and add the approval ticket or document reference to Approval reference, then rerun the check.', `Approval threshold ${facts.currency}: ${approval}.`);
     }
   }
   const status = checks.some(c => c.outcome === 'FAIL') ? 'NON_COMPLIANT' : checks.some(c => c.outcome === 'UNKNOWN') ? 'NEEDS_REVIEW' : 'COMPLIANT';
